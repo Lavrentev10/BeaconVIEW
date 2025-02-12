@@ -1,38 +1,68 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
+#include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
+#include <BLEClient.h>
+#include <BLEUUID.h>
+#include <BLE2902.h>
 
-int scanTime = 1; // Время сканирования в секундах
-const std::string targetDeviceName = "BT5.2 Mouse"; // Фильтр по имени
+#define DEVICE_NAME "ESP32_BLE_Receiver"
+#define SERVICE_UUID "0000180D-0000-1000-8000-00805F9B34FB"  // UUID сервиса
+#define CHARACTERISTIC_UUID "2A37"  // UUID характеристики
 
-class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
-    void onResult(BLEAdvertisedDevice advertisedDevice) {
-        std::string deviceName = advertisedDevice.getName();
-        
-        if (deviceName == targetDeviceName) { // Фильтр по имени устройства
-            Serial.printf("Найдено устройство: %s | RSSI: %d dBm\n", 
-                          advertisedDevice.toString().c_str(), 
-                          advertisedDevice.getRSSI());
-        }
+class MyClientCallback : public BLEClientCallbacks {
+    void onConnect(BLEClient* pclient) {
+        Serial.println("Connected to BLE server");
+    }
+    void onDisconnect(BLEClient* pclient) {
+        Serial.println("Disconnected from BLE server");
     }
 };
 
+void notifyCallback(BLERemoteCharacteristic* pCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
+    Serial.print("Received data: ");
+    Serial.write(pData, length);
+    Serial.println();
+}
+
 void setup() {
     Serial.begin(115200);
-    Serial.println("Запуск BLE-сканирования...");
+    BLEDevice::init(DEVICE_NAME);
+    BLEScan* pBLEScan = BLEDevice::getScan();
+    pBLEScan->setActiveScan(true);
+    
+    while (true) {
+        Serial.println("Scanning for repeater...");
+        BLEScanResults foundDevices = pBLEScan->start(5, false);
+        for (int i = 0; i < foundDevices.getCount(); i++) {
+            BLEAdvertisedDevice device = foundDevices.getDevice(i);
+            if (device.haveServiceUUID() || device.getServiceUUID().toString().c_str() == "0000180D-0000-1000-8000-00805F9B34FB") {
+                // Serial.printf("%d) ServiceUUID = %s\n",i, device.getServiceUUID().toString());
+                Serial.printf("Raw UUID: %s\n", device.getServiceUUID().toString().c_str());
 
-    BLEDevice::init("ESP32_BLE_Scanner"); // Инициализация BLE
-    BLEScan* pBLEScan = BLEDevice::getScan(); // Получаем сканер
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true); // Активное сканирование
-    pBLEScan->start(scanTime, false);
+                Serial.println("Found repeater, connecting...");
+                BLEClient* pClient = BLEDevice::createClient();
+                pClient->setClientCallbacks(new MyClientCallback());
+                pClient->connect(&device);
+                BLERemoteService* pRemoteService = pClient->getService(SERVICE_UUID);
+                if (pRemoteService) {
+                    BLERemoteCharacteristic* pRemoteCharacteristic = pRemoteService->getCharacteristic(CHARACTERISTIC_UUID);
+                    if (pRemoteCharacteristic) {
+                        Serial.println("Subscribing to notifications...");
+                        pRemoteCharacteristic->registerForNotify(notifyCallback);
+                        return;
+                    }
+                }
+                Serial.println("Failed to find characteristic, disconnecting...");
+                pClient->disconnect();
+            }
+        }
+        Serial.printf("Found devices: %d\n", foundDevices.getCount());
+        delay(5000);
+    }
 }
 
 void loop() {
-    // Запуск сканирования каждые 5 секунд
-    BLEScan* pBLEScan = BLEDevice::getScan();
-    BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
-    // Serial.printf("Завершено сканирование. Найдено устройств: %d\n", foundDevices.getCount());
-    delay(1000);
+    delay(1000); // Основной цикл не выполняет ничего, так как обработка идёт через уведомления
 }
