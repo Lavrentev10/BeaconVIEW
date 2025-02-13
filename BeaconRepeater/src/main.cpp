@@ -6,6 +6,9 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 
+#include <string>
+#include <algorithm>
+
 #define DEVICE_NAME "ESP32_BLE_Repeater"
 #define TARGET_DEVICE_NAME "BT5.2 Mouse"
 #define SCAN_TIME 5 // Время сканирования в секундах
@@ -18,14 +21,35 @@ std::string lastDeviceInfo = "";
 class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) {
         if (advertisedDevice.getName() == TARGET_DEVICE_NAME) {
-            std::string deviceInfo = "MAC: " + advertisedDevice.getAddress().toString() + 
-                                     " RSSI: " + std::to_string(advertisedDevice.getRSSI());
+
+            int rssi = advertisedDevice.getRSSI();
+            std::string rssiStr = std::to_string(rssi);
+
+            // Удаляем символ '-' из строки
+            rssiStr.erase(std::remove(rssiStr.begin(), rssiStr.end(), '-'), rssiStr.end());
+
+            std::string deviceInfo = "1 " + advertisedDevice.getAddress().toString() + 
+                                     " " + rssiStr;
             if (deviceInfo != lastDeviceInfo) {
                 lastDeviceInfo = deviceInfo;
                 Serial.println(("Found target device: " + deviceInfo).c_str());
                 if (pCharacteristic) {
-                    pCharacteristic->setValue(deviceInfo);
-                    pCharacteristic->notify();
+                    std::string message = deviceInfo + '\0'; // Добавляем завершающий символ
+                    Serial.print("Effective MTU: ");
+                    Serial.println(BLEDevice::getMTU());
+
+                    if (deviceInfo.length() > 20) {
+                        std::string part1 = deviceInfo.substr(0, 20);
+                        std::string part2 = deviceInfo.substr(20);
+                        pCharacteristic->setValue(part1);
+                        pCharacteristic->notify();
+                        delay(10); // Небольшая задержка между уведомлениями
+                        pCharacteristic->setValue(part2);
+                        pCharacteristic->notify();
+                    } else {
+                        pCharacteristic->setValue(deviceInfo);
+                        pCharacteristic->notify();
+                    }
                 }
             }
         }
@@ -35,6 +59,7 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 void setup() {
     Serial.begin(115200);
     BLEDevice::init(DEVICE_NAME);
+    BLEDevice::setMTU(50);
     
     // Настройка сервера BLE
     pServer = BLEDevice::createServer();
