@@ -66,7 +66,7 @@ void loop() {
                 Serial.println("Found repeater, connecting...");
                 BLEClient* pClient = BLEDevice::createClient();
                 pClient->setClientCallbacks(new MyClientCallback());
-                if (pClient->connect(&device)) {
+                if (pClient->connect(&device)) {    
                     BLERemoteService* pRemoteService = pClient->getService(SERVICE_UUID);
                     if (pRemoteService) {
                         BLERemoteCharacteristic* pRemoteCharacteristic = pRemoteService->getCharacteristic(CHARACTERISTIC_UUID);

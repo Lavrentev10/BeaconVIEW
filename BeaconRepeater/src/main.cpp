@@ -9,9 +9,12 @@
 #include <string>
 #include <algorithm>
 
+
 #define DEVICE_NAME "ESP32_BLE_Repeater"
 #define TARGET_DEVICE_NAME "BT5.2 Mouse"
 #define SCAN_TIME 5 // Время сканирования в секундах
+
+std::string RepeaterUUID = "2";
 
 BLEServer *pServer = nullptr;
 BLECharacteristic *pCharacteristic = nullptr;
@@ -23,13 +26,15 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
         if (advertisedDevice.getName() == TARGET_DEVICE_NAME) {
 
             int rssi = advertisedDevice.getRSSI();
+            std::string address = advertisedDevice.getAddress().toString();
+            address.erase(std::remove(address.begin(), address.end(), ':'), address.end());
             std::string rssiStr = std::to_string(rssi);
 
             // Удаляем символ '-' из строки
             rssiStr.erase(std::remove(rssiStr.begin(), rssiStr.end(), '-'), rssiStr.end());
 
-            std::string deviceInfo = "1 " + advertisedDevice.getAddress().toString() + 
-                                     " " + rssiStr;
+            std::string deviceInfo = RepeaterUUID + ";" + address + 
+                                     ";" + rssiStr;
             if (deviceInfo != lastDeviceInfo) {
                 lastDeviceInfo = deviceInfo;
                 Serial.println(("Found target device: " + deviceInfo).c_str());
@@ -80,6 +85,8 @@ void setup() {
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);
     pBLEScan->setWindow(99);
+
+    delay(1000);
 }
 
 void loop() {
