@@ -14,7 +14,8 @@
 #define TARGET_DEVICE_NAME "BT5.2 Mouse"
 #define SCAN_TIME 5 // Время сканирования в секундах
 
-std::string RepeaterUUID = "2";
+std::string RepeaterUUID = "1";
+std::string RepeaterBLEUUID = "180D";
 
 BLEServer *pServer = nullptr;
 BLECharacteristic *pCharacteristic = nullptr;
@@ -64,11 +65,11 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
 void setup() {
     Serial.begin(115200);
     BLEDevice::init(DEVICE_NAME);
-    BLEDevice::setMTU(50);
+    BLEDevice::setMTU(23);
     
     // Настройка сервера BLE
     pServer = BLEDevice::createServer();
-    BLEService *pService = pServer->createService(BLEUUID("180D")); // UUID сервиса
+    BLEService *pService = pServer->createService(BLEUUID(RepeaterBLEUUID)); // UUID сервиса
     pCharacteristic = pService->createCharacteristic(
         BLEUUID((uint16_t)0x2A37),
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
